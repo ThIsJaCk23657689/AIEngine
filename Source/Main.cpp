@@ -346,6 +346,7 @@ public:
 
             if (this->CurrentTime - this->RedBalls[i].LastFoodFrame > 15.0f) {
                 this->RedBalls[i].Hungry();
+                this->RedBalls[i].LastFoodFrame = this->CurrentTime;
             }
 
             this->RedBalls[i].Update(DeltaTime);
@@ -407,6 +408,8 @@ public:
                 ProjectionSettings.OrthogonalHeight,
                 view
         );
+
+        std::cout << this->CurrentTime << std::endl;
 	}
 
 	void Render(Nexus::DisplayMode monitor_type) override {
