@@ -154,7 +154,7 @@ public:
         for (unsigned int i = 0; i < 5; i++) {
             glm::vec3 ball_position = glm::vec3(unif_ball_position_xz(rand_generator), 0.4f, unif_ball_position_xz(rand_generator));
             glm::vec3 ball_velocity = glm::vec3(unif_ball_velocity(rand_generator), 0.0f, unif_ball_velocity(rand_generator));
-            AgentObject temp_ball(ball_position, ball_velocity, 0.425f);
+            AgentObject temp_ball(ball_position, ball_velocity, 0.275f);
             temp_ball.Diffuse = glm::vec4(1.0f, 0.25f, 0.25f, 1.0);
             RedBalls.push_back(temp_ball);
         }
@@ -163,7 +163,7 @@ public:
         for (unsigned int i = 0; i < 5; i++) {
             glm::vec3 ball_position = glm::vec3(unif_ball_position_xz(rand_generator), 0.4f, unif_ball_position_xz(rand_generator));
             glm::vec3 ball_velocity = glm::vec3(unif_ball_velocity(rand_generator), 0.0f, unif_ball_velocity(rand_generator));
-            AgentObject temp_ball(ball_position, ball_velocity, 0.425f);
+            AgentObject temp_ball(ball_position, ball_velocity, 0.275f);
             temp_ball.Diffuse = glm::vec4(0.25f, 1.0f, 0.25f, 1.0);
             GreenBalls.push_back(temp_ball);
         }
@@ -280,38 +280,148 @@ public:
 
         // RedBalls
         for (unsigned int i = 0; i < this->RedBalls.size(); i++) {
+            if (this->RedBalls[i].Destroyed) {
+                continue;
+            }
+
+            if (this->RedBalls[i].CurrentState == STATE_SEARCH) {
+                this->RedBalls[i].Velocity = glm::normalize(this->RedBalls[i].Velocity) * 2.0f;
+            }
+
             this->RedBalls[i].Edge(-10, 10, 0, 20, -10, 10);
 
+            // 紅球對於食物的處理狀況
             for(unsigned int j = 0; j < this->BlueBalls.size(); j++) {
                 this->RedBalls[i].SearchFood(this->BlueBalls[j]);
-                Collision collision = CollisionWithObstacle(this->RedBalls[i], this->BlueBalls[j]);
+                Collision collision = CollisionDetection(this->RedBalls[i], this->BlueBalls[j]);
                 if (std::get<0>(collision)) {
                     // Collision Resolution
                     if (this->BlueBalls[j].Destroyed == GL_FALSE) {
                         if (this->RedBalls[i].GrowUp()) {
                             this->RedBalls[i].LastFoodFrame = this->CurrentTime;
                             this->BlueBalls[j].Destroyed = GL_TRUE;
+                        } else {
+                            // Collision Resolution (讓球i不要撞到球j)
+                            Direction dir = std::get<1>(collision);
+                            glm::vec3 diff_vector = std::get<2>(collision);
+                            if (dir == LEFT || dir == RIGHT) {
+                                this->RedBalls[i].Velocity.x = -this->RedBalls[i].Velocity.x;
+                                GLfloat penetration = this->BlueBalls[j].Radius - (std::abs(diff_vector.x) - this->RedBalls[i].Radius);
+                                if (dir == LEFT) {
+                                    this->RedBalls[i].Position.x -= penetration;
+                                } else {
+                                    this->RedBalls[i].Position.x += penetration;
+                                }
+                            } else if (dir == UP || dir == DOWN) {
+                                this->RedBalls[i].Velocity.y = -this->RedBalls[i].Velocity.y;
+                                GLfloat penetration = this->BlueBalls[j].Radius - (std::abs(diff_vector.y) - this->RedBalls[i].Radius);
+                                if (dir == DOWN) {
+                                    this->RedBalls[i].Position.y -= penetration;
+                                } else {
+                                    this->RedBalls[i].Position.y += penetration;
+                                }
+                            } else if (dir == FRONT || dir == BACK) {
+                                this->RedBalls[i].Velocity.z = -this->RedBalls[i].Velocity.z;
+                                GLfloat penetration = this->BlueBalls[j].Radius - (std::abs(diff_vector.z) - this->RedBalls[i].Radius);
+                                if (dir == BACK) {
+                                    this->RedBalls[i].Position.z -= penetration;
+                                } else {
+                                    this->RedBalls[i].Position.z += penetration;
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            for(unsigned int j = 0; j < this->GreenBalls.size(); j++) {
-                this->RedBalls[i].Runaway(this->GreenBalls[j]);
-                Collision collision = CollisionWithObstacle(this->RedBalls[i], this->GreenBalls[j]);
+
+            // 紅球對於自己人的處理狀況
+            for(unsigned int j = i + 1; j < this->RedBalls.size(); j++) {
+                if (i == j) {
+                    continue;
+                }
+
+                // this->RedBalls[i].SearchSex(this->RedBalls[j]);
+                Collision collision = CollisionDetection(this->RedBalls[i], this->RedBalls[j]);
                 if (std::get<0>(collision)) {
                     // Collision Resolution
-                    if (this->BlueBalls[j].Destroyed == GL_FALSE) {
-                        if (this->RedBalls[i].GrowUp()) {
-                            this->RedBalls[i].LastFoodFrame = this->CurrentTime;
-                            this->BlueBalls[j].Destroyed = GL_TRUE;
+                    if (this->RedBalls[j].Destroyed == GL_FALSE) {
+                        // Collision Resolution (讓球i不要撞到球j)
+                        Direction dir = std::get<1>(collision);
+                        glm::vec3 diff_vector = std::get<2>(collision);
+                        if (dir == LEFT || dir == RIGHT) {
+                            this->RedBalls[i].Velocity.x = -this->RedBalls[i].Velocity.x;
+                            GLfloat penetration = this->RedBalls[j].Radius - (std::abs(diff_vector.x) - this->RedBalls[i].Radius);
+                            if (dir == LEFT) {
+                                this->RedBalls[i].Position.x -= penetration;
+                            } else {
+                                this->RedBalls[i].Position.x += penetration;
+                            }
+                        } else if (dir == FRONT || dir == BACK) {
+                            this->RedBalls[i].Velocity.z = -this->RedBalls[i].Velocity.z;
+                            GLfloat penetration = this->RedBalls[j].Radius - (std::abs(diff_vector.z) - this->RedBalls[i].Radius);
+                            if (dir == BACK) {
+                                this->RedBalls[i].Position.z -= penetration;
+                            } else {
+                                this->RedBalls[i].Position.z += penetration;
+                            }
+                        }
+                    }
+
+                }
+            }
+
+            // 紅球對於敵人的處理狀況
+            for(unsigned int j = 0; j < this->GreenBalls.size(); j++) {
+                this->RedBalls[i].SearchEnemy(this->GreenBalls[j]);
+                Collision collision = CollisionDetection(this->RedBalls[i], this->GreenBalls[j]);
+                if (std::get<0>(collision)) {
+                    // Collision Resolution
+                    if (this->GreenBalls[j].Destroyed == GL_FALSE) {
+                        // Collision Resolution
+                        Direction dir = std::get<1>(collision);
+                        glm::vec3 diff_vector = std::get<2>(collision);
+                        if (dir == LEFT || dir == RIGHT) {
+                            this->RedBalls[i].Velocity.x = -this->RedBalls[i].Velocity.x;
+                            GLfloat penetration = this->GreenBalls[j].Radius - (std::abs(diff_vector.x) - this->RedBalls[i].Radius);
+                            if (dir == LEFT) {
+                                this->RedBalls[i].Position.x -= penetration;
+                            } else {
+                                this->RedBalls[i].Position.x += penetration;
+                            }
+                        } else if (dir == UP || dir == DOWN) {
+                            this->RedBalls[i].Velocity.y = -this->RedBalls[i].Velocity.y;
+                            GLfloat penetration = this->GreenBalls[j].Radius - (std::abs(diff_vector.y) - this->RedBalls[i].Radius);
+                            if (dir == DOWN) {
+                                this->RedBalls[i].Position.y -= penetration;
+                            } else {
+                                this->RedBalls[i].Position.y += penetration;
+                            }
+                        } else if (dir == FRONT || dir == BACK) {
+                            this->RedBalls[i].Velocity.z = -this->RedBalls[i].Velocity.z;
+                            GLfloat penetration = this->GreenBalls[j].Radius - (std::abs(diff_vector.z) - this->RedBalls[i].Radius);
+                            if (dir == BACK) {
+                                this->RedBalls[i].Position.z -= penetration;
+                            } else {
+                                this->RedBalls[i].Position.z += penetration;
+                            }
+                        }
+
+                        if (this->RedBalls[i].Radius < this->GreenBalls[j].Radius) {
+                            // 綠吃紅
+                            this->RedBalls[i].Die();
+                            this->GreenBalls[j].CurrentState = STATE_SEARCH;
+                        } else if (this->RedBalls[i].Radius > this->GreenBalls[j].Radius) {
+                            // 紅吃綠
+                            this->GreenBalls[j].Die();
+                            this->RedBalls[i].CurrentState = STATE_SEARCH;
                         }
                     }
                 }
             }
 
             for(unsigned int j = 0; j < Obstacles.size(); j++) {
-                Collision collision = CollisionWithObstacle(this->RedBalls[i], Obstacles[j]);
+                Collision collision = CollisionDetection(this->RedBalls[i], Obstacles[j]);
                 if (std::get<0>(collision)) {
                     // Collision Resolution
                     Direction dir = std::get<1>(collision);
@@ -349,19 +459,167 @@ public:
                 this->RedBalls[i].LastFoodFrame = this->CurrentTime;
             }
 
+            if (this->RedBalls[i].CurrentState == STATE_SEX && this->RedBalls[i].FoodAmount == 6) {
+                glm::vec3 baby_pos = this->RedBalls[i].Position;
+                glm::vec3 baby_vel = this->RedBalls[i].Velocity;
+                float baby_rad = this->RedBalls[i].Radius / 2.0f;
+                this->RedBalls[i].Hungry();
+                this->RedBalls[i].Hungry();
+                this->RedBalls[i].Hungry();
+
+                AgentObject temp_ball = AgentObject(baby_pos, baby_vel, baby_rad);
+                temp_ball.Diffuse = glm::vec4(1.0f, 0.25f, 0.25f, 1.0);
+                this->RedBalls.push_back(temp_ball);
+
+                this->RedBalls[i].CurrentState = STATE_SEARCH;
+            }
+
             this->RedBalls[i].Update(DeltaTime);
         }
 
         // GreenBalls
         for (unsigned int i = 0; i < this->GreenBalls.size(); i++) {
-            this->GreenBalls[i].Edge(-10, 10, 0, 20, -10, 10);
-            /*
-            for(unsigned int j = (i + 1); j < this->BlueBalls.size(); j++) {
-                this->BlueBalls[i].CollisionWithBall(this->BlueBalls[j], elasticities);
+            if (this->GreenBalls[i].Destroyed) {
+                continue;
             }
-            */
+
+            if (this->GreenBalls[i].CurrentState == STATE_SEARCH) {
+                this->GreenBalls[i].Velocity = glm::normalize(this->GreenBalls[i].Velocity) * 2.0f;
+            }
+
+            this->GreenBalls[i].Edge(-10, 10, 0, 20, -10, 10);
+
+            // 綠球對於食物的處理狀況
+            for(unsigned int j = 0; j < this->BlueBalls.size(); j++) {
+                this->GreenBalls[i].SearchFood(this->BlueBalls[j]);
+                Collision collision = CollisionDetection(this->GreenBalls[i], this->BlueBalls[j]);
+                if (std::get<0>(collision)) {
+                    // Collision Resolution
+                    if (this->BlueBalls[j].Destroyed == GL_FALSE) {
+                        if (this->GreenBalls[i].GrowUp()) {
+                            this->GreenBalls[i].LastFoodFrame = this->CurrentTime;
+                            this->BlueBalls[j].Destroyed = GL_TRUE;
+                        } else {
+                            // Collision Resolution (讓球i不要撞到球j)
+                            Direction dir = std::get<1>(collision);
+                            glm::vec3 diff_vector = std::get<2>(collision);
+                            if (dir == LEFT || dir == RIGHT) {
+                                this->GreenBalls[i].Velocity.x = -this->GreenBalls[i].Velocity.x;
+                                GLfloat penetration = this->BlueBalls[j].Radius - (std::abs(diff_vector.x) - this->GreenBalls[i].Radius);
+                                if (dir == LEFT) {
+                                    this->GreenBalls[i].Position.x -= penetration;
+                                } else {
+                                    this->GreenBalls[i].Position.x += penetration;
+                                }
+                            } else if (dir == UP || dir == DOWN) {
+                                this->GreenBalls[i].Velocity.y = -this->GreenBalls[i].Velocity.y;
+                                GLfloat penetration = this->BlueBalls[j].Radius - (std::abs(diff_vector.y) - this->GreenBalls[i].Radius);
+                                if (dir == DOWN) {
+                                    this->GreenBalls[i].Position.y -= penetration;
+                                } else {
+                                    this->GreenBalls[i].Position.y += penetration;
+                                }
+                            } else if (dir == FRONT || dir == BACK) {
+                                this->GreenBalls[i].Velocity.z = -this->GreenBalls[i].Velocity.z;
+                                GLfloat penetration = this->BlueBalls[j].Radius - (std::abs(diff_vector.z) - this->GreenBalls[i].Radius);
+                                if (dir == BACK) {
+                                    this->GreenBalls[i].Position.z -= penetration;
+                                } else {
+                                    this->GreenBalls[i].Position.z += penetration;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 綠球對於敵人的處理狀況
+            for(unsigned int j = 0; j < this->RedBalls.size(); j++) {
+                this->GreenBalls[i].SearchEnemy(this->RedBalls[j]);
+                Collision collision = CollisionDetection(this->GreenBalls[i], this->RedBalls[j]);
+                if (std::get<0>(collision)) {
+                    // Collision Resolution
+                    if (this->RedBalls[j].Destroyed == GL_FALSE) {
+                        // Collision Resolution
+                        Direction dir = std::get<1>(collision);
+                        glm::vec3 diff_vector = std::get<2>(collision);
+                        if (dir == LEFT || dir == RIGHT) {
+                            this->GreenBalls[i].Velocity.x = -this->GreenBalls[i].Velocity.x;
+                            GLfloat penetration = this->RedBalls[j].Radius - (std::abs(diff_vector.x) - this->GreenBalls[i].Radius);
+                            if (dir == LEFT) {
+                                this->GreenBalls[i].Position.x -= penetration;
+                            } else {
+                                this->GreenBalls[i].Position.x += penetration;
+                            }
+                        } else if (dir == UP || dir == DOWN) {
+                            this->GreenBalls[i].Velocity.y = -this->GreenBalls[i].Velocity.y;
+                            GLfloat penetration = this->RedBalls[j].Radius - (std::abs(diff_vector.y) - this->GreenBalls[i].Radius);
+                            if (dir == DOWN) {
+                                this->GreenBalls[i].Position.y -= penetration;
+                            } else {
+                                this->GreenBalls[i].Position.y += penetration;
+                            }
+                        } else if (dir == FRONT || dir == BACK) {
+                            this->GreenBalls[i].Velocity.z = -this->GreenBalls[i].Velocity.z;
+                            GLfloat penetration = this->RedBalls[j].Radius - (std::abs(diff_vector.z) - this->GreenBalls[i].Radius);
+                            if (dir == BACK) {
+                                this->GreenBalls[i].Position.z -= penetration;
+                            } else {
+                                this->GreenBalls[i].Position.z += penetration;
+                            }
+                        }
+
+                        if (this->GreenBalls[i].Radius < this->RedBalls[j].Radius) {
+                            // 紅吃綠
+                            this->GreenBalls[i].Die();
+                            this->RedBalls[j].CurrentState = STATE_SEARCH;
+                        } else if (this->GreenBalls[i].Radius > this->RedBalls[j].Radius) {
+                            // 綠吃紅
+                            this->RedBalls[j].Die();
+                            this->GreenBalls[i].CurrentState = STATE_SEARCH;
+                        }
+                    }
+                }
+            }
+
+            // 綠球對於自己人的處理狀況
+            for(unsigned int j = i + 1; j < this->GreenBalls.size(); j++) {
+                if (i == j) {
+                    continue;
+                }
+
+                // this->RedBalls[i].SearchSex(this->RedBalls[j]);
+                Collision collision = CollisionDetection(this->GreenBalls[i], this->GreenBalls[j]);
+                if (std::get<0>(collision)) {
+                    // Collision Resolution
+                    if (this->GreenBalls[j].Destroyed == GL_FALSE) {
+                        // Collision Resolution (讓球i不要撞到球j)
+                        Direction dir = std::get<1>(collision);
+                        glm::vec3 diff_vector = std::get<2>(collision);
+                        if (dir == LEFT || dir == RIGHT) {
+                            this->GreenBalls[i].Velocity.x = -this->GreenBalls[i].Velocity.x;
+                            GLfloat penetration = this->GreenBalls[j].Radius - (std::abs(diff_vector.x) - this->GreenBalls[i].Radius);
+                            if (dir == LEFT) {
+                                this->GreenBalls[i].Position.x -= penetration;
+                            } else {
+                                this->GreenBalls[i].Position.x += penetration;
+                            }
+                        } else if (dir == FRONT || dir == BACK) {
+                            this->GreenBalls[i].Velocity.z = -this->GreenBalls[i].Velocity.z;
+                            GLfloat penetration = this->GreenBalls[j].Radius - (std::abs(diff_vector.z) - this->GreenBalls[i].Radius);
+                            if (dir == BACK) {
+                                this->GreenBalls[i].Position.z -= penetration;
+                            } else {
+                                this->GreenBalls[i].Position.z += penetration;
+                            }
+                        }
+                    }
+
+                }
+            }
+
             for(unsigned int j = 0; j < Obstacles.size(); j++) {
-                Collision collision = CollisionWithObstacle(this->GreenBalls[i], Obstacles[j]);
+                Collision collision = CollisionDetection(this->GreenBalls[i], Obstacles[j]);
                 if (std::get<0>(collision)) {
                     // Collision Resolution
                     Direction dir = std::get<1>(collision);
@@ -393,6 +651,26 @@ public:
                     }
                 }
             }
+
+            if (this->CurrentTime - this->GreenBalls[i].LastFoodFrame > 15.0f) {
+                this->GreenBalls[i].Hungry();
+                this->GreenBalls[i].LastFoodFrame = this->CurrentTime;
+            }
+
+            if (this->GreenBalls[i].CurrentState == STATE_SEX && this->GreenBalls[i].FoodAmount == 6) {
+                glm::vec3 baby_pos = this->GreenBalls[i].Position;
+                glm::vec3 baby_vel = this->GreenBalls[i].Velocity;
+                this->GreenBalls[i].Hungry();
+                this->GreenBalls[i].Hungry();
+                this->GreenBalls[i].Hungry();
+
+                AgentObject temp_ball = AgentObject(baby_pos, baby_vel, 0.275f);
+                temp_ball.Diffuse = glm::vec4(0.25f, 1.0f, 0.25f, 1.0);
+                this->GreenBalls.push_back(temp_ball);
+
+                this->GreenBalls[i].CurrentState = STATE_SEARCH;
+            }
+
             this->GreenBalls[i].Update(DeltaTime);
         }
 
@@ -409,7 +687,7 @@ public:
                 view
         );
 
-        std::cout << this->CurrentTime << std::endl;
+        // std::cout << this->CurrentTime << std::endl;
 	}
 
 	void Render(Nexus::DisplayMode monitor_type) override {
@@ -609,15 +887,20 @@ public:
         myShader->SetBool("material.enableEmissionTexture", false);
         myShader->SetFloat("material.shininess", 32.0f);
         for (unsigned int i = 0; i < RedBalls.size(); i++) {
-            myShader->SetVec4("material.ambient", RedBalls[i].Ambient);
-            myShader->SetVec4("material.diffuse", RedBalls[i].Diffuse);
-            myShader->SetVec4("material.specular", RedBalls[i].Specular);
-            model->Push();
-            model->Save(RedBalls[i].Model);
-            sphere->Draw(myShader.get(), model->Top());
-            model->Pop();
+            if (!this->RedBalls[i].Destroyed) {
+                myShader->SetVec4("material.ambient", RedBalls[i].Ambient);
+                myShader->SetVec4("material.diffuse", RedBalls[i].Diffuse);
+                myShader->SetVec4("material.specular", RedBalls[i].Specular);
+                model->Push();
+                model->Save(RedBalls[i].Model);
+                sphere->Draw(myShader.get(), model->Top());
+                model->Pop();
+            }
         }
         for (unsigned int i = 0; i < GreenBalls.size(); i++) {
+            if (this->GreenBalls[i].Destroyed) {
+                continue;
+            }
             myShader->SetVec4("material.ambient", GreenBalls[i].Ambient);
             myShader->SetVec4("material.diffuse", GreenBalls[i].Diffuse);
             myShader->SetVec4("material.specular", GreenBalls[i].Specular);
@@ -627,15 +910,16 @@ public:
             model->Pop();
         }
         for (unsigned int i = 0; i < BlueBalls.size(); i++) {
-            if (!BlueBalls[i].Destroyed) {
-                myShader->SetVec4("material.ambient", BlueBalls[i].Ambient);
-                myShader->SetVec4("material.diffuse", BlueBalls[i].Diffuse);
-                myShader->SetVec4("material.specular", BlueBalls[i].Specular);
-                model->Push();
-                model->Save(BlueBalls[i].Model);
-                sphere->Draw(myShader.get(), model->Top());
-                model->Pop();
+            if (this->BlueBalls[i].Destroyed) {
+                continue;
             }
+            myShader->SetVec4("material.ambient", BlueBalls[i].Ambient);
+            myShader->SetVec4("material.diffuse", BlueBalls[i].Diffuse);
+            myShader->SetVec4("material.specular", BlueBalls[i].Specular);
+            model->Push();
+            model->Save(BlueBalls[i].Model);
+            sphere->Draw(myShader.get(), model->Top());
+            model->Pop();
         }
 
         // ==================== Draw a cube ====================
@@ -858,11 +1142,12 @@ public:
                         ImGui::BulletText("Acceleration: (%.2f, %.2f, %.2f)| %.2f m/s^2", a.x, a.y, a.z, glm::length(a));
                         ImGui::BulletText("Net Force: (%.2f, %.2f, %.2f) | %.2f N", f.x, f.y, f.z, glm::length(f));
 
+
                         ImGui::BulletText("Distance: (%.2f, %.2f, %.2f, %.2f)", currnet_ball->DistanceMemberFunc["very close"], currnet_ball->DistanceMemberFunc["close"], currnet_ball->DistanceMemberFunc["far"], currnet_ball->DistanceMemberFunc["very far"]);
                         ImGui::BulletText("Speed: (%.2f, %.2f, %.2f)", currnet_ball->SpeedMemberFunc["slow"], currnet_ball->SpeedMemberFunc["moderate"], currnet_ball->SpeedMemberFunc["fast"]);
-                        ImGui::BulletText("Hold: (%.2f)", currnet_ball->Action["hold"]);
-                        ImGui::BulletText("Walk: (%.2f)", currnet_ball->Action["walk"]);
-                        ImGui::BulletText("Run: (%.2f)", currnet_ball->Action["run"]);
+                        ImGui::BulletText("Hold: (%.2f), Walk: (%.2f), Run: (%.2f)", currnet_ball->Action["hold"],  currnet_ball->Action["walk"], currnet_ball->Action["run"]);
+                        ImGui::BulletText("CurrentState %d", currnet_ball->CurrentState);
+                        ImGui::BulletText("FoodAmount: %d", currnet_ball->FoodAmount);
                     }
                     ImGui::TreePop();
 				}
@@ -992,7 +1277,8 @@ public:
 		ImGui::End();
 	}
 
-    Collision CollisionWithObstacle(BallObject ball, GameObject obstacle) {
+	// 食物與障礙物的碰撞偵測
+    Collision CollisionDetection(BallObject ball, GameObject obstacle) {
         glm::vec3 diff = ball.Position - obstacle.Position;
         // 障礙物的長寬高是2*2*2
         glm::vec3 aabb_half_extents = glm::vec3(1.0f);
@@ -1007,7 +1293,8 @@ public:
         }
     }
 
-    Collision CollisionWithObstacle(AgentObject ball, GameObject obstacle) {
+    // agent與障礙物的碰撞偵測
+    Collision CollisionDetection(AgentObject ball, GameObject obstacle) {
         glm::vec3 diff = ball.Position - obstacle.Position;
         // 障礙物的長寬高是2*2*2
         glm::vec3 aabb_half_extents = glm::vec3(1.0f);
@@ -1022,10 +1309,23 @@ public:
         }
     }
 
-    Collision CollisionWithObstacle(AgentObject one, BallObject two) {
+    // agent與食物的碰撞偵測
+    Collision CollisionDetection(AgentObject one, BallObject two) {
         glm::vec3 diff = one.Position - two.Position;
         GLfloat distance = glm::length(diff);
         if (distance <= (one.Radius + two.Radius)) {
+            return std::make_tuple(GL_TRUE, VectorDirection(diff), diff);
+        } else {
+            return std::make_tuple(GL_FALSE, UP, glm::vec3(0.0f));
+        }
+    }
+
+    // agent與agent的碰撞偵測
+    Collision CollisionDetection(AgentObject one, AgentObject two) {
+        glm::vec3 diff = one.Position - two.Position;
+        GLfloat distance = glm::length(diff);
+        if (distance <= (one.Radius + two.Radius)) {
+
             return std::make_tuple(GL_TRUE, VectorDirection(diff), diff);
         } else {
             return std::make_tuple(GL_FALSE, UP, glm::vec3(0.0f));
