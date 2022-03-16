@@ -974,7 +974,7 @@ public:
         }
         myShader->SetBool("material.enableEmission", false);
 
-        // ImGui::ShowDemoWindow();
+        ImGui::ShowDemoWindow();
 
 	}
 
